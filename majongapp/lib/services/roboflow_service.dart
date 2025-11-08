@@ -1,34 +1,30 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class RoboflowService {
-  final String apiUrl =
-    "https://majong-backend-vercel-74swytgyi-zaccazbaabs-projects.vercel.app/api/inferMahjong";
+  final String vercelUrl = "https://mahjong-backend-xp31.vercel.app/api/inferMahjong";
 
-  Future<Map<String, dynamic>?> sendImageFile(String imagePath) async {
+  Future<Map<String, dynamic>?> sendBase64Image(String base64Image) async {
+    final cleanBase64 = base64Image.replaceAll('\n', '');
+
+    print("Sending base64 length: ${cleanBase64.length}");
+
     try {
-      // 轉 Base64  
-      final bytes = await File(imagePath).readAsBytes();
-      final base64Image = base64Encode(bytes);
-
       final response = await http.post(
-        Uri.parse(apiUrl),
+        Uri.parse(vercelUrl),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"imageBase64": base64Image}),
+        body: jsonEncode({"imageBase64": cleanBase64}),
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print("辨識結果: $data");
-        return data;
+        return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
-        print("API 錯誤: ${response.statusCode}");
-        print("訊息: ${response.body}");
+        print("API 回傳錯誤: ${response.statusCode}, ${response.body}");
+        return null;
       }
     } catch (e) {
-      print("呼叫 API 例外: $e");
+      print("RoboflowService 發生錯誤: $e");
+      return null;
     }
-    return null;
   }
 }

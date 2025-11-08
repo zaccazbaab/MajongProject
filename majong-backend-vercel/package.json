@@ -1,9 +1,0 @@
-{
-  "name": "majong-backend-vercel",
-  "version": "1.0.0",
-  "description": "",
-  "main": "api/inferMahjong.js",
-  "dependencies": {
-    "node-fetch": "^2.6.12"
-  }
-}

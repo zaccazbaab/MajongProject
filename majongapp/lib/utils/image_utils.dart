@@ -3,5 +3,6 @@ import 'dart:convert';
 
 Future<String> imageToBase64(String imagePath) async {
   final bytes = await File(imagePath).readAsBytes();
-  return base64Encode(bytes);
+  final base64Image = base64Encode(bytes);
+  return base64Image;
 }
