@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:majongapp/main.dart';
 import '../services/roboflow_service.dart';
+import '../services/scoring_service.dart';
 import '../utils/tiles.dart';
 import '../utils/image_utils.dart';
 import 'record_page.dart';
@@ -13,6 +15,14 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  String selfWind = "東";
+  String roundWind = "東";
+  bool is_tsumo = true;
+  String nextWind(String current) {
+  final idx = winds.indexOf(current);
+  return winds[(idx + 1) % winds.length];
+  }
+  final List<String> winds = ["東", "南", "西", "北"];
   int _selectedIndex = 0;
   final ImagePicker picker = ImagePicker();
   final RoboflowService rfService = RoboflowService();
@@ -183,6 +193,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 16),
                   Row(
+                    
                     children: [
                       const Text("寶牌數: ", style: TextStyle(color: Colors.white)),
                       SizedBox(
@@ -202,7 +213,9 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
                     onPressed: sortedClasses.isEmpty ? null : () {
@@ -212,11 +225,63 @@ class _HomePageState extends State<HomePage> {
                       };
                       print("整手牌: ${handData['tiles']}");
                       print("寶牌數: ${handData['dora']}");
-                      // TODO: 呼叫點數計算模組
+                      ScoringService.calculateScore(
+                        handData['tiles'] as List<String>,selfWind,roundWind,
+                        doraCount: handData['dora'] as int,
+                      ).then((scoreResult) {
+                        print("計算結果: $scoreResult");
+                      }).catchError((error) {
+                        print("計算失敗: $error");
+                      });
+                  
+
+
                     },
                     child: const Text("檢查手牌"),
                   ),
-                ],
+                  const SizedBox(width: 12),
+                  //自風
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey,
+                      foregroundColor: Colors.white
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        selfWind = nextWind(selfWind);
+                      });
+                    },
+                    child:Text("自風: $selfWind"),
+                  ),
+                  const SizedBox(width: 12),
+                  //場風
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey,
+                      foregroundColor: Colors.white
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        roundWind = nextWind(roundWind);
+                      });
+                    },
+                    child:Text("場風: $roundWind"),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey,
+                      foregroundColor: Colors.white
+                    ),
+                      onPressed:(){
+                        setState(() {
+                          is_tsumo = !is_tsumo;
+                        });
+                      },
+                      child: Text(is_tsumo ? "自摸" : "榮和")
+                      )
+            ])],
+                
               ),
             ),
     );
