@@ -15,14 +15,22 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String selfWind = "東";
-  String roundWind = "東";
+  bool isEditMode = false;// 編輯模式
+  Set<int> selectedIndices = {};// 選取的牌索引
+  Set<int> actionIndices = {}; // 吃/碰/槓選中的牌索引
+  List<Map<String, dynamic>> actionSets = []; // 吃/碰/槓的牌組
+  int? winningTileIndex;
+  bool showActionMenu = false;
+  // 27:東,28:南,29:西,30:北
+  int selfWind = 27;
+  int roundWind = 27;
   bool is_tsumo = true;
-  String nextWind(String current) {
-  final idx = winds.indexOf(current);
-  return winds[(idx + 1) % winds.length];
+  int nextWind(int current) {
+  final idx = current-27;
+  return ((idx + 1) % 4)+27;
   }
   final List<String> winds = ["東", "南", "西", "北"];
+  final List<String> winds_string = ["EW", "SW", "WW", "NW"];
   int _selectedIndex = 0;
   final ImagePicker picker = ImagePicker();
   final RoboflowService rfService = RoboflowService();
@@ -41,17 +49,209 @@ class _HomePageState extends State<HomePage> {
     tiles.sort((a, b) => order.indexOf(a).compareTo(order.indexOf(b)));
     return tiles;
   }
+  Widget _buildActionButton(String text, Color color, VoidCallback onPressed) {
+  return ElevatedButton(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: color,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    onPressed: onPressed,
+    child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 18)),
+  );
+}
+
+
+
+
+
+void _onChi() {
+  print("執行 吃");
+  setState(() {
+    actionSets.add({
+      "tiles": selectedIndices.map((i) => sortedClasses[i]).toList(),
+      "indices": selectedIndices.toList(), 
+      "type": "chi",
+      "opened": true,
+    });
+    showActionMenu = false;
+    selectedIndices.clear();
+  });
+}
+
+void _onPon() {
+  print("執行 碰");
+  setState(() {
+    final indices = selectedNotifier.value.toList(); // 用最新選牌
+    print("Selected indices for Pon: $indices");
+    actionSets.add({
+      "tiles": indices.map((i) => sortedClasses[i]).toList(),
+      "indices": indices,
+      "type": "pon",
+      "opened": true,
+    });
+    selectedNotifier.value.clear(); // 清除選取
+    selectedIndices.clear();         // 清除 selectedIndices
+    showActionMenu = false;
+    print("Updated actionSets: $actionSets");
+  });
+}
+
+
+
+void _onKan() {
+  print("執行 槓");
+  setState(() {
+    actionSets.add({
+      "tiles": selectedIndices.map((i) => sortedClasses[i]).toList(),
+      "indices": selectedIndices.toList(),
+      "type": "kan",
+      "opened": true,
+    });
+    showActionMenu = false;
+    selectedIndices.clear();
+  });
+}
+
+void _onAnkan() {
+  print("執行 暗槓");
+  setState(() {
+    actionSets.add({
+      "tiles": selectedIndices.map((i) => sortedClasses[i]).toList(),
+      "indices": selectedIndices.toList(),
+      "type": "kan",
+      "opened": false,
+    });
+    showActionMenu = false;
+    selectedIndices.clear();
+  });
+}
+void _onCancel() {
+  print("執行 取消");
+  setState(() {
+    showActionMenu = false;
+    selectedIndices.clear();
+  });
+}
+
+void _showScoreResult(Map<String, dynamic> scoreResult, String winTile) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true, // 允許彈窗高度自動調整
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) {
+      final yakuList = (scoreResult['yaku'] as List).join(', ');
+      final han = scoreResult['han'];
+      final fu = scoreResult['fu'];
+      final cost = scoreResult['cost'] ?? {};
+      final totalCost = cost['total'] ?? 0;
+      final mainCost = cost['main'] ?? 0;
+      final additionalCost = cost['additional'] ?? 0;
+
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.6,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Text(
+                    "和牌: $winTile",
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text("役: $yakuList", style: const TextStyle(fontSize: 16)),
+                const SizedBox(height: 6),
+                Text("符: $fu", style: const TextStyle(fontSize: 16)),
+                Text("翻: $han", style: const TextStyle(fontSize: 16)),
+                const Divider(height: 24, thickness: 1),
+                Text(
+                  "分數:",
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                Text("總計: $totalCost", style: const TextStyle(fontSize: 16, color: Colors.green)),
+                Text("本場: $mainCost", style: const TextStyle(fontSize: 16)),
+                Text("加算: $additionalCost", style: const TextStyle(fontSize: 16)),
+                const SizedBox(height: 16),
+                Center(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("關閉"),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+
+void _showActionMenu() {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.black87,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildActionButton("吃", Colors.green, () {
+              _onChi();
+              Navigator.pop(ctx);
+            }),
+            _buildActionButton("碰", Colors.blue, () {
+              _onPon();
+              Navigator.pop(ctx);
+            }),
+            _buildActionButton("槓", Colors.purple, () {
+              _onKan();
+              Navigator.pop(ctx);
+            }),
+            _buildActionButton("暗槓", Colors.red, () {
+              _onAnkan();
+              Navigator.pop(ctx);
+            }),
+            _buildActionButton("取消", Colors.grey, () {
+              _onCancel();
+              Navigator.pop(ctx);
+            }),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+
 
   // 彈出選牌視窗
   Future<String?> pickTileDialog(BuildContext context) {
     return showDialog<String>(
       context: context,
-      barrierColor: Colors.black38,
+      barrierColor: Colors.blueGrey,
       builder: (_) => Dialog(
         backgroundColor: Colors.transparent,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.black87,
+            color: Colors.blueGrey,
             borderRadius: BorderRadius.circular(8),
           ),
           width: double.maxFinite,
@@ -152,145 +352,301 @@ class _HomePageState extends State<HomePage> {
 
 
 
-  Widget _handTilesPage() {
-    double screenWidth = MediaQuery.of(context).size.width;
-    double cardWidth = (screenWidth - 4 * 9 - 32) / 10;
-    double cardHeight = cardWidth * 1.5;
 
-    return Center(
-      child: result == null
-          ? const Text('等待使用者選擇照片', style: TextStyle(color: Colors.white))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: cardHeight,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: sortedClasses.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 4),
-                      itemBuilder: (_, index) {
-                        final cls = sortedClasses[index];
-                        final path = classToFile[cls] ?? '';
-                        return GestureDetector(
-                          onTap: () async {
-                            final newCls = await pickTileDialog(context);
-                            if (newCls != null) {
-                              setState(() {
-                                sortedClasses[index] = newCls;
-                                sortedClasses = sortTiles(sortedClasses);
-                              });
-                            }
-                          },
-                          child: path.isNotEmpty
-                              ? Image.asset(path, width: cardWidth, height: cardHeight)
-                              : Container(width: cardWidth, height: cardHeight, color: Colors.grey),
-                        );
-                      },
-                    ),
+ValueNotifier<Set<int>> selectedNotifier = ValueNotifier({});
+ValueNotifier<int?> winningNotifier = ValueNotifier(null);
+
+Widget _handTilesPage() {
+  double screenWidth = MediaQuery.of(context).size.width;
+  double cardWidth = (screenWidth - 4 * 9 - 32) / 10;
+  double cardHeight = cardWidth * 1.5;
+
+  return Center(
+    child: result == null
+        ? const Text('等待使用者選擇照片', style: TextStyle(color: Colors.white))
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: cardHeight,
+                  child: ValueListenableBuilder<Set<int>>(
+                    valueListenable: selectedNotifier,
+                    builder: (_, selectedIndices, __) {
+                      return ValueListenableBuilder<int?>(
+                        valueListenable: winningNotifier,
+                        builder: (_, winningIndex, __) {
+                          return ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: sortedClasses.length,
+                            itemBuilder: (_, index) {
+                              final cls = sortedClasses[index];
+                              final path = classToFile[cls] ?? '';
+
+                              return GestureDetector(
+                                onTap: () async {
+                                  if (isEditMode) {
+                                    final newTile = await pickTileDialog(context);
+                                    if (newTile != null) {
+                                      setState(() {
+                                        sortedClasses[index] = newTile;
+                                        sortedClasses = sortTiles(sortedClasses);
+                                      });
+                                    }
+                                  } else {
+                                    // 點紅框牌：取消整組
+                                    final hitSetIndex = actionSets.indexWhere(
+                                        (set) => set['indices'].contains(index));
+                                    if (hitSetIndex != -1) {
+                                      setState(() {
+                                        actionSets.removeAt(hitSetIndex);
+                                      });
+                                      return;
+                                    }
+
+                                    // 更新選牌
+                                    final newSelected = Set<int>.from(selectedNotifier.value);
+                                    if (newSelected.contains(index)) {
+                                      newSelected.remove(index);
+                                    } else {
+                                      newSelected.add(index);
+                                    }
+                                    selectedNotifier.value = newSelected;
+                                    selectedIndices = newSelected;
+                                    if (newSelected.length == 3) {
+                                      _showActionMenu();
+                                    }
+                                  }
+                                },
+                                onLongPress: () {
+                                  winningNotifier.value =
+                                      winningNotifier.value == index ? null : index;
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 150),
+                                  margin: EdgeInsets.only(
+                                      bottom:
+                                          selectedNotifier.value.contains(index) ? 8 : 0),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: winningNotifier.value == index
+                                          ? Colors.greenAccent
+                                          : actionSets.any(
+                                                  (set) => set['indices'].contains(index))
+                                              ? Colors.red
+                                              : selectedNotifier.value.contains(index)
+                                                  ? Colors.yellowAccent
+                                                  : Colors.transparent,
+                                      width: 3,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: path.isNotEmpty
+                                      ? Image.asset(path,
+                                          width: cardWidth, height: cardHeight)
+                                      : Container(
+                                          width: cardWidth,
+                                          height: cardHeight,
+                                          color: Colors.grey,
+                                        ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    
-                    children: [
-                      const Text("寶牌數: ", style: TextStyle(color: Colors.white)),
-                      SizedBox(
-                        width: 60,
-                        child: TextField(
-                          keyboardType: TextInputType.number,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(
-                            hintText: "0",
-                            hintStyle: TextStyle(color: Colors.white54),
-                            border: UnderlineInputBorder(),
-                          ),
-                          onChanged: (value) => setState(() {
-                            doraCount = int.tryParse(value) ?? 0;
-                          }),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
+                ),
+                const SizedBox(height: 16),
+                // 寶牌輸入
+                Row(
                   children: [
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
-                    onPressed: sortedClasses.isEmpty ? null : () {
-                      final handData = {
-                        "tiles": sortedClasses,
-                        "dora": doraCount,
-                      };
-                      print("整手牌: ${handData['tiles']}");
-                      print("寶牌數: ${handData['dora']}");
-                      ScoringService.calculateScore(
-                        handData['tiles'] as List<String>,selfWind,roundWind,
-                        doraCount: handData['dora'] as int,
-                      ).then((scoreResult) {
-                        print("計算結果: $scoreResult");
-                      }).catchError((error) {
-                        print("計算失敗: $error");
-                      });
-                  
-
-
-                    },
-                    child: const Text("檢查手牌"),
-                  ),
-                  const SizedBox(width: 12),
-                  //自風
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueGrey,
-                      foregroundColor: Colors.white
+                    const Text("寶牌數: ", style: TextStyle(color: Colors.white)),
+                    SizedBox(
+                      width: 60,
+                      child: TextField(
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText: "0",
+                          hintStyle: TextStyle(color: Colors.white54),
+                          border: UnderlineInputBorder(),
+                        ),
+                        onChanged: (value) => setState(() {
+                          doraCount = int.tryParse(value) ?? 0;
+                        }),
+                      ),
                     ),
-                    onPressed: () {
-                      setState(() {
-                        selfWind = nextWind(selfWind);
-                      });
-                    },
-                    child:Text("自風: $selfWind"),
-                  ),
-                  const SizedBox(width: 12),
-                  //場風
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueGrey,
-                      foregroundColor: Colors.white
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        roundWind = nextWind(roundWind);
-                      });
-                    },
-                    child:Text("場風: $roundWind"),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // 各種按鈕
+                Row(
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900]),
+                      onPressed: sortedClasses.isEmpty
+                          ? null
+                          : () {
+                              final handData = {
+                                "tiles": sortedClasses,
+                                "dora": doraCount,
+                                "melds": actionSets
+                                    .map((set) => {
+                                          "type": set['type'],
+                                          "tiles": set['indices']
+                                              .map((idx) => sortedClasses[idx])
+                                              .toList(),
+                                          "opened": set['opened'] ?? true,
+                                        })
+                                    .toList(),
+                                "win_tile": winningNotifier.value != null
+                                    ? sortedClasses[winningNotifier.value!]
+                                    : null,
+                              };
+                              print("整手牌: ${handData['tiles']}");
+                              print("寶牌數: ${handData['dora']}");
+                              print("melds: ${handData['melds']}");
+                              print("最後摸到的牌: ${handData['win_tile']}");
+
+                              ScoringService.calculateScore(
+                                handData['tiles'] as List<String>,
+                                winds_string[selfWind - 27],
+                                winds_string[roundWind - 27],
+                                handData['win_tile'] as String,
+                                doraCount: handData['dora'] as int,
+                                is_tsumo: is_tsumo,
+                                melds: handData['melds'] as List<Map<String, dynamic>>,
+                              ).then((scoreResult) {
+                                print("計算結果: $scoreResult");
+                                showDialog(
+                                context: context,
+                                builder: (ctx) {
+                                  final yakuList = (scoreResult['yaku'] as List).join(', ');
+                                  final han = scoreResult['han'];
+                                  final fu = scoreResult['fu'];
+                                  final totalCost = scoreResult['cost']['total'];
+                                  final mainCost = scoreResult['cost']['main'];
+                                  final additionalCost = scoreResult['cost']['additional'];
+
+                                  return AlertDialog(
+                                    title: const Text("胡牌結果",style:TextStyle(color:Colors.black)),
+                                    content: SingleChildScrollView(
+                                      child:DefaultTextStyle(
+                                        style: const TextStyle(color: Colors.black),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text("和牌: ${handData['win_tile']}"),
+                                            Text("役: $yakuList",),
+                                            Text("符: $fu"),
+                                            Text("翻: $han"),
+                                            const SizedBox(height: 8),
+                                            Text("分數: 總 $totalCost (親家 $mainCost + 子家 $additionalCost)"),
+                                          ],
+                                        ),
+                                        )
+                                      ),
+
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () {
+                                          // TODO:儲存紀錄
+                                          //saveHandRecord(handData);
+                                          Navigator.pop(context);
+                                        },
+                                        child: const Text("儲存"),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                        },
+                                        child: const Text("關閉"),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                              }).catchError((error) {
+                                print("計算失敗: $error");
+                              });
+                            },
+                      child: const Text("檢查手牌"),
                     ),
                     const SizedBox(width: 12),
+                    // 自風
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueGrey,
-                      foregroundColor: Colors.white
+                          backgroundColor: Colors.blueGrey, foregroundColor: Colors.white),
+                      onPressed: () {
+                        setState(() {
+                          selfWind = nextWind(selfWind);
+                        });
+                      },
+                      child: Text("自風: ${winds[selfWind - 27]}"),
                     ),
-                      onPressed:(){
+                    const SizedBox(width: 12),
+                    // 場風
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueGrey, foregroundColor: Colors.white),
+                      onPressed: () {
+                        setState(() {
+                          roundWind = nextWind(roundWind);
+                        });
+                      },
+                      child: Text("場風: ${winds[roundWind - 27]}"),
+                    ),
+                    const SizedBox(width: 12),
+                    // 自摸/榮和切換
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueGrey, foregroundColor: Colors.white),
+                      onPressed: () {
                         setState(() {
                           is_tsumo = !is_tsumo;
                         });
                       },
-                      child: Text(is_tsumo ? "自摸" : "榮和")
-                      )
-            ])],
-                
-              ),
+                      child: Text(is_tsumo ? "自摸" : "榮和"),
+                    ),
+                  ],
+                ),
+              ],
             ),
-    );
-  }
+          ),
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("麻將程式")),
+      appBar: AppBar(title: const Text("麻將程式"),
+      actions: [
+        Row(
+          children: [
+            Text(isEditMode ? "編輯模式" : "選擇模式",style: const TextStyle(fontSize: 16),),
+          Switch(
+            value: isEditMode,
+            onChanged: (value) {
+              setState(() {
+                isEditMode = value;
+                selectedIndices.clear();
+              });
+            },
+            activeTrackColor: Colors.lightBlue,
+            inactiveTrackColor: Colors.grey,
+          )
+          ],
+          
+          )
+      ]),
+      
+
+
+
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -323,10 +679,32 @@ class _HomePageState extends State<HomePage> {
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          _handTilesPage(),
+          Stack(
+            children: [
+              _handTilesPage(),
+
+              if (showActionMenu)
+                Positioned(
+                  bottom: 16,
+                  left: 0,
+                  right: 0,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildActionButton("吃", Colors.green, _onChi),
+                      _buildActionButton("碰", Colors.orange, _onPon),
+                      _buildActionButton("槓", Colors.red, _onKan),
+                      _buildActionButton("暗槓", Colors.purple, _onAnkan),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+
           const RecordPage(),
         ],
       ),
+
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(onPressed: _pickImage, child: const Icon(Icons.camera))
           : null,

@@ -3,17 +3,20 @@ import 'package:http/http.dart' as http;
 class ScoringService {
   static const String baseUrl ="https://mahjongpyapi-production.up.railway.app/check_hand";
 
-  static Future<Map<String, dynamic>> calculateScore(List<String> tiles,String player_wind,String round_wind ,{int doraCount=0,bool is_tsumo=true}) async {
+  static Future<Map<String, dynamic>> calculateScore(List<String> tiles,String player_wind,String round_wind ,String win_tile,{int doraCount=0,bool is_tsumo=true,List<Map<String, dynamic>>? melds }) async {
     final url = Uri.parse(baseUrl);
+    print("Calculating score with tiles: $tiles\nmelds:$melds\nwin_tile:$win_tile\ndoraCount: $doraCount\nis_tsumo: $is_tsumo\nplayer_wind: $player_wind\nround_wind: $round_wind");
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'tiles': tiles,
+        'melds': melds,
         'dora_count': doraCount,
         'is_tsumo':true,
         'player_wind':player_wind,
         'round_wind':round_wind,
+        'win_tile':win_tile,
       }),
     );
 
