@@ -25,6 +25,11 @@ class _HomePageState extends State<HomePage> {
   int selfWind = 27;
   int roundWind = 27;
   bool is_tsumo = true;
+  bool isRichi = false;
+  bool isHoutei = false;
+  bool isHaitei = false;
+  bool isChankan = false;
+  bool isRinshan = false;
   int nextWind(int current) {
   final idx = current-27;
   return ((idx + 1) % 4)+27;
@@ -35,7 +40,7 @@ class _HomePageState extends State<HomePage> {
   final ImagePicker picker = ImagePicker();
   final RoboflowService rfService = RoboflowService();
   Map<String, dynamic>? result;
-  List<String> sortedClasses = [];
+  List<String> sortedClasses = ["1D","2D","3D","4D","5D","6D","7D","8D","9D","1B","2B","3B","EW","EW"];
   int doraCount = 0; // 寶牌數量
 
   // 手牌排序
@@ -68,14 +73,17 @@ class _HomePageState extends State<HomePage> {
 void _onChi() {
   print("執行 吃");
   setState(() {
+    final indices = selectedNotifier.value.toList();
     actionSets.add({
-      "tiles": selectedIndices.map((i) => sortedClasses[i]).toList(),
-      "indices": selectedIndices.toList(), 
+      "tiles": indices.map((i) => sortedClasses[i]).toList(),
+      "indices": indices.toList(), 
       "type": "chi",
       "opened": true,
     });
-    showActionMenu = false;
+    selectedNotifier.value.clear(); // 清除選取
     selectedIndices.clear();
+    showActionMenu = false;
+  
   });
 }
 
@@ -102,12 +110,15 @@ void _onPon() {
 void _onKan() {
   print("執行 槓");
   setState(() {
+    final indices = selectedNotifier.value.toList();
     actionSets.add({
-      "tiles": selectedIndices.map((i) => sortedClasses[i]).toList(),
-      "indices": selectedIndices.toList(),
+      "tiles": indices.map((i) => sortedClasses[i]).toList(),
+      "indices": indices.toList(),
       "type": "kan",
       "opened": true,
     });
+    selectedNotifier.value.clear(); // 清除選取
+    selectedIndices.clear();
     showActionMenu = false;
     selectedIndices.clear();
   });
@@ -116,12 +127,15 @@ void _onKan() {
 void _onAnkan() {
   print("執行 暗槓");
   setState(() {
+    final indices = selectedNotifier.value.toList();
     actionSets.add({
-      "tiles": selectedIndices.map((i) => sortedClasses[i]).toList(),
-      "indices": selectedIndices.toList(),
+      "tiles": indices.map((i) => sortedClasses[i]).toList(),
+      "indices": indices.toList(),
       "type": "kan",
       "opened": false,
     });
+    selectedNotifier.value.clear(); // 清除選取
+    selectedIndices.clear();
     showActionMenu = false;
     selectedIndices.clear();
   });
@@ -133,6 +147,92 @@ void _onCancel() {
     selectedIndices.clear();
   });
 }
+void _showExtraSettings() {
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text("其他設定"),
+        content: SizedBox(
+          height: 200, // 固定高度，讓滑動區域明顯
+          child: Scrollbar(
+            thumbVisibility: true, // ← 滑動條永遠可見（更明顯）
+            child: SingleChildScrollView(
+              child: StatefulBuilder(
+                builder: (context, setStateDialog) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CheckboxListTile(
+                        title: const Text("立直"),
+                        value: isRichi,
+                        onChanged: (val) {
+                          setStateDialog(() => isRichi = val ?? false);
+                          setState(() {});
+                        },
+                      ),
+                      CheckboxListTile(
+                        title: const Text("河底撈魚"),
+                        value: isHoutei,
+                        onChanged: (val) {
+                          setStateDialog(() => isHoutei = val ?? false);
+                          setState(() {});
+                        },
+                      ),
+                      CheckboxListTile(
+                        title: const Text("海底撈月"),
+                        value: isHaitei,
+                        onChanged: (val) {
+                          setStateDialog(() => isHaitei = val ?? false);
+                          setState(() {});
+                        },
+                      ),
+                      
+
+
+                      CheckboxListTile(
+                        title: const Text("搶槓"),
+                        value: isChankan,
+                        onChanged: (val) {
+                          setStateDialog(() => isChankan = val ?? false);
+                          setState(() {});
+                        },
+                      ),
+                      CheckboxListTile(
+                        title: const Text("嶺上開花"),
+                        value: isRinshan,
+                        onChanged: (val) {
+                          setStateDialog(() => isRinshan = val ?? false);
+                          setState(() {});
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+              
+            ),
+          ),
+        ),
+        actionsPadding: EdgeInsets.zero,
+        buttonPadding: EdgeInsets.zero,
+
+        actions: [
+          TextButton(
+            child: const Text("關閉"),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+
+
+
+
+
 
 void _showScoreResult(Map<String, dynamic> scoreResult, String winTile) {
   showModalBottomSheet(
@@ -143,7 +243,9 @@ void _showScoreResult(Map<String, dynamic> scoreResult, String winTile) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     builder: (ctx) {
-      final yakuList = (scoreResult['yaku'] as List).join(', ');
+      final yaku = scoreResult['yaku'];
+  final yakuList = (yaku is List ? yaku : []).join(', ');
+
       final han = scoreResult['han'];
       final fu = scoreResult['fu'];
       final cost = scoreResult['cost'] ?? {};
@@ -321,7 +423,7 @@ void _showActionMenu() {
   final res = await rfService.sendBase64Image(base64);
 
   print("Full response: $res");
-
+  
   // 安全檢查
   if (res != null &&
       res['outputs'] is List &&
@@ -345,7 +447,6 @@ void _showActionMenu() {
     print("辨識失敗或資料格式不正確");
     setState(() {
       result = null;
-      sortedClasses = [];
     });
   }
 }
@@ -362,7 +463,7 @@ Widget _handTilesPage() {
   double cardHeight = cardWidth * 1.5;
 
   return Center(
-    child: result == null
+    child: result == null  && sortedClasses.isEmpty
         ? const Text('等待使用者選擇照片', style: TextStyle(color: Colors.white))
         : SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -505,7 +606,13 @@ Widget _handTilesPage() {
                                 "win_tile": winningNotifier.value != null
                                     ? sortedClasses[winningNotifier.value!]
                                     : null,
+                                "isRichi": isRichi,
+                                "isHoutei": isHoutei,
+                                "isHaitei": isHaitei,
+                                "isChankan": isChankan,
+                                "isRinshan": isRinshan,
                               };
+
                               print("整手牌: ${handData['tiles']}");
                               print("寶牌數: ${handData['dora']}");
                               print("melds: ${handData['melds']}");
@@ -518,6 +625,11 @@ Widget _handTilesPage() {
                                 handData['win_tile'] as String,
                                 doraCount: handData['dora'] as int,
                                 is_tsumo: is_tsumo,
+                                isRichi: handData['isRichi'] as bool,
+                                isHoutei: handData['isHoutei'] as bool,
+                                isHaitei: handData['isHaitei'] as bool,
+                                isChankan: handData['isChankan'] as bool,
+                                isRinshan: handData['isRinshan'] as bool,
                                 melds: handData['melds'] as List<Map<String, dynamic>>,
                               ).then((scoreResult) {
                                 print("計算結果: $scoreResult");
@@ -527,34 +639,48 @@ Widget _handTilesPage() {
                                   final yakuList = (scoreResult['yaku'] as List).join(', ');
                                   final han = scoreResult['han'];
                                   final fu = scoreResult['fu'];
-                                  final totalCost = scoreResult['cost']['total'];
                                   final mainCost = scoreResult['cost']['main'];
                                   final additionalCost = scoreResult['cost']['additional'];
+                                  final totalCost = scoreResult['cost']['total'];
+
+                                  final bool isParent = selfWind == roundWind; // 判斷親家
+                                  String scoreText = "";
+
+                                  if (is_tsumo) {
+                                    if (isParent) {
+                                      // 親家自摸
+                                      scoreText = "總 $totalCost 子家 $additionalCost";
+                                    } else {
+                                      // 子家自摸
+                                      scoreText = "總 $totalCost 親家 $mainCost\n子家 $additionalCost";
+                                    }
+                                  } else {
+                                    // 榮和
+                                    scoreText = "總 $totalCost";
+                                  }
 
                                   return AlertDialog(
-                                    title: const Text("胡牌結果",style:TextStyle(color:Colors.black)),
+                                    title: const Text("胡牌結果", style: TextStyle(color: Colors.black)),
                                     content: SingleChildScrollView(
-                                      child:DefaultTextStyle(
+                                      child: DefaultTextStyle(
                                         style: const TextStyle(color: Colors.black),
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text("和牌: ${handData['win_tile']}"),
-                                            Text("役: $yakuList",),
+                                            Text("役: $yakuList"),
                                             Text("符: $fu"),
                                             Text("翻: $han"),
                                             const SizedBox(height: 8),
-                                            Text("分數: 總 $totalCost (親家 $mainCost + 子家 $additionalCost)"),
+                                            Text("$scoreText"),
                                           ],
                                         ),
-                                        )
                                       ),
-
+                                    ),
                                     actions: [
                                       TextButton(
                                         onPressed: () {
-                                          // TODO:儲存紀錄
-                                          //saveHandRecord(handData);
+                                          // TODO: 儲存紀錄
+                                          // saveHandRecord(handData);
                                           Navigator.pop(context);
                                         },
                                         child: const Text("儲存"),
@@ -569,6 +695,7 @@ Widget _handTilesPage() {
                                   );
                                 },
                               );
+
                               }).catchError((error) {
                                 print("計算失敗: $error");
                               });
@@ -611,6 +738,18 @@ Widget _handTilesPage() {
                       },
                       child: Text(is_tsumo ? "自摸" : "榮和"),
                     ),
+                    const SizedBox(width: 12),
+
+                    // 其他設定
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueGrey, foregroundColor: Colors.white),
+                      onPressed: () {
+                        _showExtraSettings();
+                      },
+                      child: const Text("其他設定"),
+                    ),
+                    
                   ],
                 ),
               ],
