@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'pages/home_page.dart'; // 你的 HomePage
+import 'pages/home_page.dart';
 
+// 全域 RouteObserver
+final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<void>>();
+double globalTileScale = 1.0;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env"); // 確保你的 .env 已存在根目錄
+  await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
 
@@ -14,13 +17,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorObservers: [routeObserver],
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFF0B6623), // 麻將桌綠
-        primaryColor: const Color(0xFF006400), // 深綠
+        scaffoldBackgroundColor: const Color(0xFF0B6623),
+        primaryColor: const Color(0xFF006400),
         colorScheme: ColorScheme.fromSwatch().copyWith(
           primary: const Color(0xFF006400),
-          secondary: const Color(0xFFFFD700), // 金色代表寶牌
+          secondary: const Color(0xFFFFD700),
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF006400),
@@ -41,7 +45,7 @@ class MyApp extends StatelessWidget {
           foregroundColor: Colors.white,
         ),
       ),
-      home: const HomePage(), // 你的主頁面
+      home: const HomePage(),
     );
   }
 }

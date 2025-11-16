@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:majongapp/db/database_helper.dart';
 import 'package:majongapp/main.dart';
 import '../services/roboflow_service.dart';
 import '../services/scoring_service.dart';
 import '../utils/tiles.dart';
 import '../utils/image_utils.dart';
 import 'record_page.dart';
+import 'dart:convert';
+import '../utils/yaku_map.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,12 +16,41 @@ class HomePage extends StatefulWidget {
   @override
   State<HomePage> createState() => _HomePageState();
 }
-
 class _HomePageState extends State<HomePage> {
-  bool isEditMode = false;// 編輯模式
-  Set<int> selectedIndices = {};// 選取的牌索引
-  Set<int> actionIndices = {}; // 吃/碰/槓選中的牌索引
-  List<Map<String, dynamic>> actionSets = []; // 吃/碰/槓的牌組
+  late double screenWidth;
+
+  Widget tileBox(
+    String imagePath, {
+    required bool isSelected,
+    required bool isWinning,
+    required bool isInMeld,
+    required double screenWidth,
+  }) {
+    double globalTileScale = 0.6;
+    double baseWidth = (screenWidth - 4 * 9 - 32) / 10;
+    double width = baseWidth * globalTileScale;
+    double height = width * 1.5;
+  return AnimatedContainer(
+    duration: const Duration(milliseconds: 150),
+    margin: EdgeInsets.only(bottom: isSelected ? 8 : 0),
+    child: imagePath.isNotEmpty
+        ? Image.asset(
+            imagePath,
+            width: width,
+            height: height,
+            fit: BoxFit.contain,
+          )
+        : Container(
+            width: width,
+            height: height,
+            color: Colors.grey,
+          ),
+  );
+}
+  bool isEditMode = false;
+  Set<int> selectedIndices = {};
+  Set<int> actionIndices = {}; 
+  List<Map<String, dynamic>> actionSets = [];
   int? winningTileIndex;
   bool showActionMenu = false;
   // 27:東,28:南,29:西,30:北
@@ -41,7 +73,7 @@ class _HomePageState extends State<HomePage> {
   final RoboflowService rfService = RoboflowService();
   Map<String, dynamic>? result;
   List<String> sortedClasses = ["1D","2D","3D","4D","5D","6D","7D","8D","9D","1B","2B","3B","EW","EW"];
-  int doraCount = 0; // 寶牌數量
+  int doraCount = 0;
 
   // 手牌排序
   List<String> sortTiles(List<String> tiles) {
@@ -80,7 +112,7 @@ void _onChi() {
       "type": "chi",
       "opened": true,
     });
-    selectedNotifier.value.clear(); // 清除選取
+    selectedNotifier.value.clear();
     selectedIndices.clear();
     showActionMenu = false;
   
@@ -90,7 +122,8 @@ void _onChi() {
 void _onPon() {
   print("執行 碰");
   setState(() {
-    final indices = selectedNotifier.value.toList(); // 用最新選牌
+    final indices = selectedNotifier.value.toList();
+
     print("Selected indices for Pon: $indices");
     actionSets.add({
       "tiles": indices.map((i) => sortedClasses[i]).toList(),
@@ -98,8 +131,8 @@ void _onPon() {
       "type": "pon",
       "opened": true,
     });
-    selectedNotifier.value.clear(); // 清除選取
-    selectedIndices.clear();         // 清除 selectedIndices
+    selectedNotifier.value.clear();
+    selectedIndices.clear();
     showActionMenu = false;
     print("Updated actionSets: $actionSets");
   });
@@ -154,9 +187,9 @@ void _showExtraSettings() {
       return AlertDialog(
         title: const Text("其他設定"),
         content: SizedBox(
-          height: 200, // 固定高度，讓滑動區域明顯
+          height: 200, 
           child: Scrollbar(
-            thumbVisibility: true, // ← 滑動條永遠可見（更明顯）
+            thumbVisibility: true, 
             child: SingleChildScrollView(
               child: StatefulBuilder(
                 builder: (context, setStateDialog) {
@@ -206,6 +239,7 @@ void _showExtraSettings() {
                           setState(() {});
                         },
                       ),
+                    
                     ],
                   );
                 },
@@ -237,14 +271,14 @@ void _showExtraSettings() {
 void _showScoreResult(Map<String, dynamic> scoreResult, String winTile) {
   showModalBottomSheet(
     context: context,
-    isScrollControlled: true, // 允許彈窗高度自動調整
+    isScrollControlled: true,
     backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     builder: (ctx) {
       final yaku = scoreResult['yaku'];
-  final yakuList = (yaku is List ? yaku : []).join(', ');
+      final yakuList = (yaku is List ? yaku : []).join(', ');
 
       final han = scoreResult['han'];
       final fu = scoreResult['fu'];
@@ -496,7 +530,6 @@ Widget _handTilesPage() {
                                       });
                                     }
                                   } else {
-                                    // 點紅框牌：取消整組
                                     final hitSetIndex = actionSets.indexWhere(
                                         (set) => set['indices'].contains(index));
                                     if (hitSetIndex != -1) {
@@ -543,14 +576,13 @@ Widget _handTilesPage() {
                                     ),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: path.isNotEmpty
-                                      ? Image.asset(path,
-                                          width: cardWidth, height: cardHeight)
-                                      : Container(
-                                          width: cardWidth,
-                                          height: cardHeight,
-                                          color: Colors.grey,
-                                        ),
+                                  child: tileBox(
+                                  path,
+                                  isSelected: selectedNotifier.value.contains(index),
+                                  isWinning: winningNotifier.value == index,
+                                  isInMeld: actionSets.any((set) => set['indices'].contains(index)),
+                                  screenWidth: MediaQuery.of(context).size.width,
+                                ),
                                 ),
                               );
                             },
@@ -591,6 +623,22 @@ Widget _handTilesPage() {
                       onPressed: sortedClasses.isEmpty
                           ? null
                           : () {
+                            if (winningNotifier.value == null) {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text("牌型不合法"),
+                                  content: const Text("請長按牌選擇最後和牌",style: TextStyle(color: Colors.black)),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text("關閉"),
+                                    )
+                                  ],
+                                ),
+                              );
+                              return;
+                            }
                               final handData = {
                                 "tiles": sortedClasses,
                                 "dora": doraCount,
@@ -632,11 +680,30 @@ Widget _handTilesPage() {
                                 isRinshan: handData['isRinshan'] as bool,
                                 melds: handData['melds'] as List<Map<String, dynamic>>,
                               ).then((scoreResult) {
+                                final han = scoreResult['han'] ?? 0;
+
+                                  if (han == 0) {
+                                    // 沒有胡牌
+                                    showDialog(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text("牌型不合法"),
+                                        content: const Text("這手牌無法胡牌"),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx),
+                                            child: const Text("關閉"),
+                                          )
+                                        ],
+                                      ),
+                                    );
+                                    return;
+                                  }
                                 print("計算結果: $scoreResult");
                                 showDialog(
                                 context: context,
                                 builder: (ctx) {
-                                  final yakuList = (scoreResult['yaku'] as List).join(', ');
+                                  final yakuList = (scoreResult['yaku'] as List<dynamic>);
                                   final han = scoreResult['han'];
                                   final fu = scoreResult['fu'];
                                   final mainCost = scoreResult['cost']['main'];
@@ -667,7 +734,7 @@ Widget _handTilesPage() {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text("役: $yakuList"),
+                                            Text("役: ${yakuList.map((y) => yakuTranslation[y] ?? y).join(', ')}"),
                                             Text("符: $fu"),
                                             Text("翻: $han"),
                                             const SizedBox(height: 8),
@@ -678,10 +745,24 @@ Widget _handTilesPage() {
                                     ),
                                     actions: [
                                       TextButton(
-                                        onPressed: () {
-                                          // TODO: 儲存紀錄
-                                          // saveHandRecord(handData);
+                                        onPressed: () async {
+                                          final record = {
+                                            "tiles": jsonEncode(sortedClasses),
+                                            "win_tile": handData['win_tile'],
+                                            "melds": jsonEncode(handData['melds']),
+                                            "han": han,
+                                            "fu": fu,
+                                            "yaku": jsonEncode(scoreResult['yaku']),
+                                            "total_score": totalCost,
+                                            "created_at": DateTime.now().toIso8601String()
+                                          };
+
+                                          await DatabaseHelper.instance.insertRecord(record);
+
                                           Navigator.pop(context);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text("紀錄已儲存"))
+                                          );
                                         },
                                         child: const Text("儲存"),
                                       ),
@@ -749,6 +830,8 @@ Widget _handTilesPage() {
                       },
                       child: const Text("其他設定"),
                     ),
+                    const SizedBox(width: 12),
+                  
                     
                   ],
                 ),
@@ -761,27 +844,39 @@ Widget _handTilesPage() {
 
   @override
   Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;
+    
     return Scaffold(
-      appBar: AppBar(title: const Text("麻將程式"),
-      actions: [
-        Row(
-          children: [
-            Text(isEditMode ? "編輯模式" : "選擇模式",style: const TextStyle(fontSize: 16),),
-          Switch(
-            value: isEditMode,
-            onChanged: (value) {
-              setState(() {
-                isEditMode = value;
-                selectedIndices.clear();
-              });
-            },
-            activeTrackColor: Colors.lightBlue,
-            inactiveTrackColor: Colors.grey,
-          )
-          ],
-          
-          )
-      ]),
+      appBar: AppBar(
+  title: Text(
+    _selectedIndex == 0
+        ? "手牌偵測"
+        : "歷史紀錄", 
+  ),
+  actions: _selectedIndex == 0
+      ? [
+          Row(
+            children: [
+              Text(
+                isEditMode ? "編輯模式" : "選擇模式",
+                style: const TextStyle(fontSize: 16),
+              ),
+              Switch(
+                value: isEditMode,
+                onChanged: (value) {
+                  setState(() {
+                    isEditMode = value;
+                    selectedIndices.clear();
+                  });
+                },
+                activeTrackColor: Colors.lightBlue,
+                inactiveTrackColor: Colors.grey,
+              )
+            ],
+          ),
+        ]
+      : [],
+),
       
 
 
@@ -840,7 +935,7 @@ Widget _handTilesPage() {
             ],
           ),
 
-          const RecordPage(),
+          RecordPage(),
         ],
       ),
 
