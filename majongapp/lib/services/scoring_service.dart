@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 class ScoringService {
-  static const String baseUrl ="https://mahjongpyapi-production.up.railway.app/check_hand";
+  static const String baseUrl ="https://vercel.com/zaccazbaabs-projects/mahjong-py-api/CwA6Mht7QbZWoexhAMTX6MQeRHmS";
 
   static Future<Map<String, dynamic>> calculateScore(List<String> tiles,String player_wind,String round_wind ,String win_tile,{int doraCount=0,bool is_tsumo=true,List<Map<String, dynamic>>? melds ,bool isHaitei=false,bool isHoutei=false,bool isChankan=false,bool isRichi=false,bool isRinshan=false}) async {
     final url = Uri.parse(baseUrl);
