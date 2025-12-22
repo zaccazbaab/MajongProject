@@ -9,6 +9,31 @@ import '../utils/image_utils.dart';
 import 'record_page.dart';
 import 'dart:convert';
 import '../utils/yaku_map.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+
+Future<String> compressImageToBase64(String imagePath) async {
+  final tempDir = await getTemporaryDirectory();
+  final targetPath =
+      '${tempDir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+  final compressedFile = await FlutterImageCompress.compressAndGetFile(
+    imagePath,
+    targetPath,
+    quality: 60,
+    minWidth: 1280,
+    minHeight: 1280,
+    format: CompressFormat.jpeg,
+  );
+
+  if (compressedFile == null) {
+    throw Exception("Image compression failed");
+  }
+
+  final bytes = await compressedFile.readAsBytes();
+  return base64Encode(bytes);
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -97,7 +122,20 @@ class _HomePageState extends State<HomePage> {
   );
 }
 
+List<String> normalizeTo14Tiles(List<String> tiles) {
+  final result = List<String>.from(tiles);
 
+  while (result.length < 14) {
+    result.add('0z');
+  }
+
+  // 如果超過 14，也保險裁掉
+  if (result.length > 14) {
+    return result.take(14).toList();
+  }
+
+  return result;
+}
 
 
 
@@ -446,44 +484,55 @@ void _showActionMenu() {
     );
   }
   static const Map<String, String> _tileCodeMap = {
-  // 萬子 (Manzu) -> C (Characters)
+  '0m':'5C',
   '1m': '1C', '2m': '2C', '3m': '3C', '4m': '4C', '5m': '5C',
   '6m': '6C', '7m': '7C', '8m': '8C', '9m': '9C',
 
-  // 索子 (Souzu) -> B (Bamboos)
+  '0s':'5B',
   '1s': '1B', '2s': '2B', '3s': '3B', '4s': '4B', '5s': '5B',
-  '6s': '6B', '7s': '7B', '8s': '8s', '9s': '9B', // 注意：這裡我將 '8s' 修正為 '8B'，因為您只提供了 1s~9s 的範圍，如果有錯請您自行調整。
-  // 註：根據您的需求 '8s' 應為 '8B'。
+  '6s': '6B', '7s': '7B', '8s': '8s', '9s': '9B',
 
-  // 筒子 (Pinzu) -> D (Dots)
+
+  '0p':'5D',
   '1p': '1D', '2p': '2D', '3p': '3D', '4p': '4D', '5p': '5D',
   '6p': '6D', '7p': '7D', '8p': '8D', '9p': '9D',
 
-  // 字牌 (Jihai / Honors)
-  // 1z: 東(E), 2z: 南(S), 3z: 西(W), 4z: 北(N)
-  '1z': 'EW', // 東 (East Wind)
-  '2z': 'SW', // 南 (South Wind)
-  '3z': 'WW', // 西 (West Wind)
-  '4z': 'NW', // 北 (North Wind)
 
-  // 三元牌 (Dragons)
-  // 5z: 白(W), 6z: 發(G), 7z: 中(R)
-  '5z': 'GD', // 白 (White Dragon)
-  '6z': 'WD', // 發 (Green Dragon)
-  '7z': 'RD', // 中 (Red Dragon)
+  '1z': 'EW', // 東
+  '2z': 'SW', // 南
+  '3z': 'WW', // 西
+  '4z': 'NW', // 北 
+
+
+  '5z': 'GD', // 白
+  '6z': 'WD', // 發
+  '7z': 'RD', // 中
 };
 
-/// 將 Roboflow 輸出的麻將牌代碼轉換為自定義代碼。
+List<String> convertRedFive(List<String> tiles) {
+  return tiles.map((t) {
+    switch (t) {
+      case '0s':
+        return '5s';
+      case '0p':
+        return '5p';
+      case '0m':
+        return '5m';
+      default:
+        return t;
+    }
+  }).toList();
+}
 List<String> convertTileCodes(List<String> originalCodes) {
   if (originalCodes.isEmpty) {
     return [];
   }
-  // 使用 .map 遍歷列表，查找對應的新代碼，找不到則返回原始代碼
+
   return originalCodes.map((code) => _tileCodeMap[code] ?? code).toList();
 }
   // 處理圖片並呼叫 Roboflow
   Future<void> _processImage(String imagePath) async {
-  final base64 = await imageToBase64(imagePath);
+  final base64 = await compressImageToBase64(imagePath);
   print("Base64 length: ${base64.length}");
   print("Start: ${base64.substring(0,50)}");
   print("End: ${base64.substring(base64.length - 50)}");
@@ -507,25 +556,23 @@ List<String> convertTileCodes(List<String> originalCodes) {
         .map((p) => p['class'] as String)
         .toList();
 
-    setState(() {
-      result = res;
-      sortedClasses = sortTiles(classes).take(14).toList();
-    });
-    // 1. 提取原始 Roboflow 牌型代碼 (原邏輯)
     final originalClasses = predictions
         .where((p) => p != null && p['class'] != null)
         .map((p) => p['class'] as String)
         .toList();
     print(originalClasses.toString());
     
-    // 2. 進行代碼轉換 (新增的步驟，位於提取之後，排序之前)
+
     final convertedClasses = convertTileCodes(originalClasses);
-    
-    // 3. 使用轉換後的代碼進行排序和狀態設置 (替換原來的 `classes` 變數)
+    print("after convertTileCodes: $convertedClasses");
+    final noRedZeroClasses = convertRedFive(convertedClasses);
+    print("after convertRedFive: $noRedZeroClasses");
+    final normalizedClasses = normalizeTo14Tiles(noRedZeroClasses);
+    print("after normalize: $normalizedClasses");
+
     setState(() {
       result = res;
-      // 使用轉換後的 `convertedClasses` 進行排序和限制數量
-      sortedClasses = sortTiles(convertedClasses).take(14).toList(); 
+      sortedClasses = sortTiles(normalizedClasses);
     });
   } else {
     print("辨識失敗或資料格式不正確");
@@ -733,12 +780,12 @@ Widget _handTilesPage() {
                                 final han = scoreResult['han'] ?? 0;
 
                                   if (han == 0) {
-                                    // 沒有胡牌
+                                    // 沒有和牌
                                     showDialog(
                                       context: context,
                                       builder: (ctx) => AlertDialog(
                                         title: const Text("牌型不合法"),
-                                        content: const Text("這手牌無法胡牌"),
+                                        content: const Text("這手牌無法和牌"),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(ctx),
@@ -777,7 +824,7 @@ Widget _handTilesPage() {
                                   }
 
                                   return AlertDialog(
-                                    title: const Text("胡牌結果", style: TextStyle(color: Colors.black)),
+                                    title: const Text("和牌結果", style: TextStyle(color: Colors.black)),
                                     content: SingleChildScrollView(
                                       child: DefaultTextStyle(
                                         style: const TextStyle(color: Colors.black),

@@ -47,7 +47,7 @@ const Map<String, String> yakuTranslation = {
 
   "KokushiMusou": "國士無雙",
   "ChuurenPoutou": "九蓮寶燈",
-  "Suuankou": "四暗刻",
+  "Suu Ankou": "四暗刻",
   "Daisangen": "大三元",
   "Shousuushii": "小四喜",
   "Ryuuiisou": "綠一色",
